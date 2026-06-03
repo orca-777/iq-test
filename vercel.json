@@ -1,0 +1,7 @@
+{
+  "outputDirectory": "client/dist",
+  "rewrites": [
+    { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/api/:path*", "destination": "/api" }
+  ]
+}
