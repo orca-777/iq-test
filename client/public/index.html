@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管培生综合评估</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --teal:#028090;--seafoam:#00A896;--navy:#0F2B46;--dark:#091A2E;
+  --bg:#F4F8FA;--white:#fff;--gray:#94A3B8;--text:#1E293B;
+  --border:#E2E8F0;--amber:#F59E0B;--green:#10B981;--red:#EF4444;
+  --blue:#3B82F6;--purple:#8B5CF6;
+}
+body{font-family:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+.top-bar{height:4px;background:linear-gradient(90deg,var(--teal),var(--seafoam));}
+.page-header{background:var(--dark);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;}
+.page-header h1{font-size:15px;font-weight:700;}
+.header-right{display:flex;align-items:center;gap:14px;}
+.timer{font-size:14px;font-weight:700;background:rgba(255,255,255,.12);padding:6px 14px;border-radius:20px;font-variant-numeric:tabular-nums;}
+.timer.urgent{background:rgba(239,68,68,.3);animation:pulse 1s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.6;}}
+
+.container{max-width:780px;margin:0 auto;padding:20px 16px;}
+
+/* ── 欢迎页 ── */
+#welcome-page{animation:fadeIn .4s;}
+.welcome-card{background:#fff;border-radius:16px;padding:40px;box-shadow:0 4px 20px rgba(0,0,0,.08);}
+.welcome-logo{width:60px;height:60px;border-radius:16px;background:linear-gradient(135deg,var(--teal),var(--seafoam));display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:20px;}
+.welcome-card h2{font-size:24px;font-weight:700;color:var(--dark);margin-bottom:8px;}
+.welcome-card .sub{font-size:14px;color:var(--gray);margin-bottom:28px;}
+.meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px;}
+.meta-item{background:var(--bg);border-radius:10px;padding:14px;text-align:center;}
+.meta-item .num{font-size:22px;font-weight:900;color:var(--teal);}
+.meta-item .lbl{font-size:11px;color:var(--gray);margin-top:3px;}
+.dim-list{margin-bottom:28px;}
+.dim-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);}
+.dim-row:last-child{border-bottom:none;}
+.dim-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.dim-icon.cog{background:#EFF6FF;}
+.dim-icon.lead{background:#FFFBEB;}
+.dim-icon.pers{background:#FAF5FF;}
+.dim-info .title{font-size:14px;font-weight:700;color:var(--text);}
+.dim-info .desc{font-size:12px;color:var(--gray);margin-top:2px;}
+.dim-badge{margin-left:auto;font-size:11px;padding:3px 10px;border-radius:12px;font-weight:600;background:var(--bg);color:var(--teal);white-space:nowrap;}
+
+.notice{background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:14px;margin-bottom:24px;font-size:13px;color:#92400E;}
+.notice ul{margin-top:6px;padding-left:18px;}
+.notice li{margin-top:4px;}
+
+.name-group{margin-bottom:20px;}
+.name-group label{display:block;font-size:13px;font-weight:700;margin-bottom:8px;}
+.name-input{width:100%;max-width:320px;padding:12px 16px;border:2px solid var(--border);border-radius:10px;font-size:15px;outline:none;transition:.2s;}
+.name-input:focus{border-color:var(--teal);}
+.start-btn{padding:14px 40px;background:linear-gradient(135deg,var(--teal),var(--seafoam));color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;transition:.2s;}
+.start-btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(2,128,144,.35);}
+.start-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+
+/* ── 考试页 ── */
+#exam-page{display:none;animation:fadeIn .3s;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.progress-bar{background:var(--border);border-radius:4px;height:6px;margin-bottom:20px;overflow:hidden;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--seafoam));border-radius:4px;transition:width .3s;}
+.progress-text{font-size:12px;color:var(--gray);margin-bottom:10px;display:flex;justify-content:space-between;}
+
+.part-header{background:linear-gradient(135deg,var(--navy),var(--dark));color:#fff;border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px;}
+.part-header .icon{font-size:24px;}
+.part-header .part-title{font-size:16px;font-weight:700;}
+.part-header .part-sub{font-size:12px;opacity:.7;margin-top:3px;}
+.part-header .part-badge{margin-left:auto;background:rgba(255,255,255,.15);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;}
+
+.question-card{background:#fff;border-radius:14px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,.08);margin-bottom:16px;}
+.q-meta{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+.q-num{background:var(--navy);color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;}
+.q-dim{font-size:11px;color:var(--gray);background:var(--bg);padding:2px 8px;border-radius:10px;}
+.q-text{font-size:14px;line-height:1.7;color:var(--text);margin-bottom:18px;white-space:pre-wrap;}
+
+.options{display:flex;flex-direction:column;gap:8px;}
+.option{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:2px solid var(--border);border-radius:10px;cursor:pointer;transition:.15s;user-select:none;}
+.option:hover{border-color:var(--teal);background:#F0FDFA;}
+.option.selected{border-color:var(--teal);background:#E0F2F1;}
+.option-key{width:24px;height:24px;border-radius:6px;background:var(--bg);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;transition:.15s;}
+.option.selected .option-key{background:var(--teal);border-color:var(--teal);color:#fff;}
+.option-text{font-size:13px;line-height:1.6;padding-top:2px;}
+
+/* Likert */
+.likert-scale{display:flex;gap:8px;margin-top:8px;}
+.likert-btn{flex:1;padding:12px 4px;border:2px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;transition:.15s;font-size:11px;color:var(--gray);}
+.likert-btn .score{font-size:18px;font-weight:900;color:var(--text);}
+.likert-btn:hover{border-color:var(--teal);}
+.likert-btn.selected{border-color:var(--teal);background:#E0F2F1;}
+.likert-btn.selected .score{color:var(--teal);}
+.likert-labels{display:flex;justify-content:space-between;font-size:11px;color:var(--gray);margin-top:6px;}
+
+.nav-btns{display:flex;gap:10px;justify-content:space-between;margin-top:8px;}
+.nav-btn{padding:12px 28px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;transition:.2s;}
+.nav-btn:hover{transform:translateY(-1px);}
+.btn-prev{background:var(--bg);color:var(--text);}
+.btn-next{background:var(--teal);color:#fff;}
+.btn-submit{background:linear-gradient(135deg,var(--teal),var(--seafoam));color:#fff;padding:14px 40px;font-size:15px;}
+.btn-next:disabled,.btn-submit:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+
+/* ── 提交页 ── */
+#submit-page{display:none;animation:fadeIn .4s;}
+.submit-card{background:#fff;border-radius:16px;padding:40px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.08);}
+.submit-icon{font-size:56px;margin-bottom:16px;}
+.submit-card h2{font-size:24px;font-weight:700;color:var(--dark);margin-bottom:10px;}
+.submit-card p{font-size:14px;color:var(--gray);line-height:1.7;}
+
+/* ── 加载 ── */
+#loading-page{display:flex;align-items:center;justify-content:center;min-height:60vh;}
+.loading-inner{text-align:center;}
+.spinner{width:40px;height:40px;border:4px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="top-bar"></div>
+<div class="page-header">
+  <h1>🏢 集团管培生综合评估</h1>
+  <div class="header-right">
+    <div class="timer" id="timer" style="display:none">60:00</div>
+  </div>
+</div>
+
+<!-- 加载中 -->
+<div class="container" id="loading-page">
+  <div class="loading-inner">
+    <div class="spinner"></div>
+    <div style="color:var(--gray);font-size:14px;">正在加载评估系统...</div>
+  </div>
+</div>
+
+<!-- 欢迎页 -->
+<div class="container" id="welcome-page" style="display:none;">
+  <div class="welcome-card">
+    <div class="welcome-logo">🎯</div>
+    <h2>管培生综合能力评估</h2>
+    <div class="sub">Management Trainee Comprehensive Assessment</div>
+
+    <div class="meta-grid">
+      <div class="meta-item"><div class="num" id="q-total">60</div><div class="lbl">总题数</div></div>
+      <div class="meta-item"><div class="num" id="q-duration">60</div><div class="lbl">限时（分钟）</div></div>
+      <div class="meta-item"><div class="num">100</div><div class="lbl">满分</div></div>
+    </div>
+
+    <div class="dim-list">
+      <div class="dim-row">
+        <div class="dim-icon cog">🧠</div>
+        <div class="dim-info">
+          <div class="title">认知能力</div>
+          <div class="desc">逻辑推理 · 数字推理 · 空间推理 · 图形推理 · 言语推理</div>
+        </div>
+        <div class="dim-badge">30题 · 权重50%</div>
+      </div>
+      <div class="dim-row">
+        <div class="dim-icon lead">🎯</div>
+        <div class="dim-info">
+          <div class="title">领导潜质</div>
+          <div class="desc">战略思维 · 决策判断 · 团队管理 · 沟通协调 · 责任担当</div>
+        </div>
+        <div class="dim-badge">15题 · 权重30%</div>
+      </div>
+      <div class="dim-row">
+        <div class="dim-icon pers">🌟</div>
+        <div class="dim-info">
+          <div class="title">性格特质</div>
+          <div class="desc">尽责性 · 情绪稳定性 · 开放性 · 宜人性 · 外向性</div>
+        </div>
+        <div class="dim-badge">15题 · 权重20%</div>
+      </div>
+    </div>
+
+    <div class="notice">
+      <b>⚠️ 注意事项</b>
+      <ul>
+        <li>考试开始后，计时即开始，请勿中途刷新页面</li>
+        <li>每道题只能选择一个答案，可在提交前修改</li>
+        <li>第三部分（性格特质）请根据自身实际情况作答，无标准答案</li>
+        <li>提交后无法修改，请确认所有题目已作答</li>
+      </ul>
+    </div>
+
+    <div class="name-group">
+      <label>请输入您的姓名</label>
+      <input type="text" class="name-input" id="candidate-name" placeholder="如：张三" autocomplete="name">
+    </div>
+    <button class="start-btn" id="start-btn" onclick="startExam()">开始评估 →</button>
+  </div>
+</div>
+
+<!-- 考试页 -->
+<div class="container" id="exam-page">
+  <div class="progress-text">
+    <span id="prog-text">第 1 题 / 共 60 题</span>
+    <span id="answered-text">已答 0 题</span>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+
+  <div id="part-header"></div>
+  <div id="question-container"></div>
+
+  <div class="nav-btns">
+    <button class="nav-btn btn-prev" id="btn-prev" onclick="prevQ()">← 上一题</button>
+    <div style="display:flex;gap:10px;">
+      <button class="nav-btn btn-next" id="btn-next" onclick="nextQ()">下一题 →</button>
+      <button class="nav-btn btn-submit" id="btn-submit" onclick="submitExam()" style="display:none">✅ 提交答案</button>
+    </div>
+  </div>
+</div>
+
+<!-- 提交完成页 -->
+<div class="container" id="submit-page">
+  <div class="submit-card">
+    <div class="submit-icon">✅</div>
+    <h2>提交成功！</h2>
+    <p>感谢您完成本次管培生综合能力评估。<br>您的答题数据已成功记录，HR团队将在后续培养方案中参考评估结果。<br><br>请关闭本页面，等待后续通知。</p>
+  </div>
+</div>
+
+<script>
+let questions = [];
+let answers   = {};  // { questionId: selectedKey }
+let currentIdx = 0;
+let timerInterval = null;
+let totalSeconds  = 3600;
+let candidateName = '';
+let examDuration  = 60;
+
+// ── 初始化 ────────────────────────────────────────────────────
+async function init() {
+  try {
+    const res = await fetch('/api/questions');
+    if (!res.ok) throw new Error('加载失败');
+    const data = await res.json();
+    questions    = data.questions || [];
+    examDuration = data.duration  || 60;
+    totalSeconds = examDuration * 60;
+
+    document.getElementById('q-total').textContent    = questions.length;
+    document.getElementById('q-duration').textContent = examDuration;
+
+    document.getElementById('loading-page').style.display = 'none';
+    document.getElementById('welcome-page').style.display  = 'block';
+  } catch (e) {
+      document.getElementById('loading-page').innerHTML = `
+        <div class="loading-inner">
+          <div style="font-size:48px;margin-bottom:16px">⚠️</div>
+          <div style="font-size:16px;color:var(--red);font-weight:700">加载失败</div>
+          <div style="font-size:13px;color:var(--gray);margin-top:8px">${e.message}</div>
+          <button onclick="location.reload()" style="margin-top:16px;padding:10px 24px;background:var(--teal);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;">重新加载</button>
+        </div>
+      `;
+  }
+}
+
+// ── 开始考试 ──────────────────────────────────────────────────
+function startExam() {
+  const name = document.getElementById('candidate-name').value.trim();
+  if (!name) { alert('请输入您的姓名后再开始'); document.getElementById('candidate-name').focus(); return; }
+  candidateName = name;
+
+  document.getElementById('welcome-page').style.display = 'none';
+  document.getElementById('exam-page').style.display     = 'block';
+  document.getElementById('timer').style.display         = 'flex';
+
+  startTimer();
+  renderQuestion();
+}
+
+// ── 计时 ──────────────────────────────────────────────────────
+function startTimer() {
+  let remaining = totalSeconds;
+  const el = document.getElementById('timer');
+
+  function tick() {
+    if (remaining <= 0) {
+      clearInterval(timerInterval);
+      alert('⏰ 时间到！系统将自动提交您的答案。');
+      doSubmit();
+      return;
+    }
+    const m = Math.floor(remaining / 60).toString().padStart(2, '0');
+    const s = (remaining % 60).toString().padStart(2, '0');
+    el.textContent = `${m}:${s}`;
+    if (remaining <= 300) el.classList.add('urgent');
+    remaining--;
+  }
+
+  tick();
+  timerInterval = setInterval(tick, 1000);
+}
+
+// ── 渲染题目 ──────────────────────────────────────────────────
+function renderQuestion() {
+  const q = questions[currentIdx];
+  if (!q) return;
+
+  // Part header（仅在切换维度时显示）
+  updatePartHeader(q);
+
+  // 进度
+  const total = questions.length;
+  const answered = Object.keys(answers).length;
+  document.getElementById('prog-text').textContent     = `第 ${currentIdx + 1} 题 / 共 ${total} 题`;
+  document.getElementById('answered-text').textContent = `已答 ${answered} 题`;
+  document.getElementById('progress-fill').style.width = ((currentIdx + 1) / total * 100) + '%';
+
+  // 上一题按钮
+  document.getElementById('btn-prev').style.visibility = currentIdx === 0 ? 'hidden' : 'visible';
+
+  // 下一题/提交按钮
+  const isLast = currentIdx === total - 1;
+  document.getElementById('btn-next').style.display   = isLast ? 'none' : 'inline-flex';
+  document.getElementById('btn-submit').style.display = isLast ? 'inline-flex' : 'none';
+
+  // 渲染题目内容
+  const container = document.getElementById('question-container');
+  const qNum = currentIdx + 1;
+  const selectedAns = answers[q.id];
+
+  if (q.q_type === 'likert') {
+    container.innerHTML = `
+      <div class="question-card">
+        <div class="q-meta">
+          <div class="q-num">${qNum}</div>
+          <div class="q-dim">${q.dimension}</div>
+        </div>
+        <div class="q-text">${q.q_text}</div>
+        <div class="likert-scale">
+          ${[1,2,3,4,5].map(v => `
+            <div class="likert-btn ${selectedAns == v ? 'selected' : ''}" onclick="selectAnswer('${q.id}', '${v}')">
+              <div class="score">${v}</div>
+              <div>${['完全不符合','不太符合','一般','比较符合','完全符合'][v-1]}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="likert-labels"><span>完全不符合</span><span>完全符合</span></div>
+      </div>
+    `;
+  } else {
+    container.innerHTML = `
+      <div class="question-card">
+        <div class="q-meta">
+          <div class="q-num">${qNum}</div>
+          <div class="q-dim">${q.dimension}</div>
+          <span style="font-size:11px;color:var(--gray)">${q.q_type === 'sjt' ? '情景判断 - 选择最佳做法' : '单选题'}</span>
+        </div>
+        <div class="q-text">${q.q_text}</div>
+        <div class="options">
+          ${(q.options || []).map(opt => `
+            <div class="option ${selectedAns === opt.key ? 'selected' : ''}" onclick="selectAnswer('${q.id}', '${opt.key}')">
+              <div class="option-key">${opt.key}</div>
+              <div class="option-text">${opt.text}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+}
+
+let lastPart = 0;
+function updatePartHeader(q) {
+  if (q.part === lastPart) return;
+  lastPart = q.part;
+  const info = {
+    1: { icon:'🧠', title:'认知能力评估', sub:'测量逻辑推理、数字运算、空间认知等认知核心能力', badge:'30题 · 权重50%', color:'#0F2B46' },
+    2: { icon:'🎯', title:'领导潜质评估', sub:'通过情景判断，评估战略思维、决策与团队领导力', badge:'15题 · 权重30%', color:'#1E3A5F' },
+    3: { icon:'🌟', title:'性格特质评估', sub:'请根据真实情况作答，本部分无对错之分', badge:'15题 · 权重20%', color:'#2D1B69' },
+  }[q.part];
+  document.getElementById('part-header').innerHTML = `
+    <div class="part-header" style="background:linear-gradient(135deg,${info.color},#091A2E)">
+      <span class="icon">${info.icon}</span>
+      <div>
+        <div class="part-title">${info.title}</div>
+        <div class="part-sub">${info.sub}</div>
+      </div>
+      <div class="part-badge">${info.badge}</div>
+    </div>
+  `;
+}
+
+function selectAnswer(qId, key) {
+  answers[qId] = key;
+  renderQuestion();
+}
+
+function nextQ() {
+  if (currentIdx < questions.length - 1) { currentIdx++; renderQuestion(); scrollTop(); }
+}
+
+function prevQ() {
+  if (currentIdx > 0) { currentIdx--; renderQuestion(); scrollTop(); }
+}
+
+function scrollTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── 提交 ──────────────────────────────────────────────────────
+async function submitExam() {
+  const total    = questions.length;
+  const answered = Object.keys(answers).length;
+  const unanswered = total - answered;
+
+  if (unanswered > 0) {
+    const go = confirm(`还有 ${unanswered} 道题目未作答，确定要提交吗？\n（未作答的题目将按0分计算）`);
+    if (!go) return;
+  } else {
+    const go = confirm('确认提交所有答案？提交后无法修改。');
+    if (!go) return;
+  }
+
+  doSubmit();
+}
+
+async function doSubmit() {
+  clearInterval(timerInterval);
+  const btn = document.getElementById('btn-submit');
+  if (btn) { btn.disabled = true; btn.textContent = '提交中...'; }
+
+  try {
+    const res = await fetch('/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: candidateName, answers })
+    });
+    if (!res.ok) throw new Error('提交失败，请联系管理员');
+
+    document.getElementById('exam-page').style.display   = 'none';
+    document.getElementById('submit-page').style.display = 'block';
+    document.getElementById('timer').style.display       = 'none';
+    window.scrollTo(0, 0);
+  } catch (e) {
+    alert('提交失败：' + e.message + '\n请截图并联系HR');
+    if (btn) { btn.disabled = false; btn.textContent = '✅ 提交答案'; }
+  }
+}
+
+// 启动
+init();
+</script>
+</body>
+</html>
