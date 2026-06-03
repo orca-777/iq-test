@@ -1,7 +1,12 @@
 {
   "outputDirectory": "client/dist",
   "rewrites": [
-    { "source": "/admin", "destination": "/admin.html" },
-    { "source": "/api/:path*", "destination": "/api" }
-  ]
+    { "source": "/admin", "destination": "/admin.html" }
+  ],
+  "functions": {
+    "api/**/*.js": {
+      "includeFiles": "server/**/*",
+      "runtime": "nodejs22.x"
+    }
+  }
 }
