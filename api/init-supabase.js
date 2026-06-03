@@ -6,7 +6,6 @@
  * 会自动创建所有表并导入题库和管理员账号
  */
 
-const { createClient } = require('@supabase/supabase-js');
 const bcrypt = require('bcryptjs');
 
 // 初始化密钥（防止未授权调用）
@@ -19,17 +18,17 @@ module.exports = async (req, res) => {
   }
 
   const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_KEY;
+  const dbPassword = process.env.SUPABASE_DB_PASSWORD;
 
-  if (!supabaseUrl || !supabaseKey) {
-    return res.status(500).json({ error: 'SUPABASE_URL or SUPABASE_KEY not set' });
+  if (!supabaseUrl || !dbPassword) {
+    return res.status(500).json({ error: 'SUPABASE_URL or SUPABASE_DB_PASSWORD not set' });
   }
 
   const projectRef = supabaseUrl.replace('https://', '').split('.')[0];
 
   const { Client } = require('pg');
 
-  // 尝试多个连接方式: Supavisor pooler (6543) -> 直连 (5432)
+  // Try multiple connection methods
   let client = null;
   const connConfigs = [
     // Supavisor transaction-mode pooler (port 6543)
@@ -38,7 +37,7 @@ module.exports = async (req, res) => {
       port: 6543,
       database: 'postgres',
       user: `postgres.${projectRef}`,
-      password: supabaseKey,
+      password: dbPassword,
       ssl: { rejectUnauthorized: false },
       connectionTimeoutMillis: 10000,
     },
@@ -47,18 +46,18 @@ module.exports = async (req, res) => {
       host: `db.${projectRef}.supabase.co`,
       port: 5432,
       database: 'postgres',
-      user: `postgres.${projectRef}`,
-      password: supabaseKey,
+      user: `postgres`,
+      password: dbPassword,
       ssl: { rejectUnauthorized: false },
       connectionTimeoutMillis: 10000,
     },
-    // Session-mode pooler (port 6543) with different host format
+    // Session-mode pooler (port 6543)
     {
       host: `${projectRef}.pooler.supabase.com`,
       port: 6543,
       database: 'postgres',
       user: `postgres.${projectRef}`,
-      password: supabaseKey,
+      password: dbPassword,
       ssl: { rejectUnauthorized: false },
       connectionTimeoutMillis: 10000,
     },
@@ -82,14 +81,10 @@ module.exports = async (req, res) => {
     });
   }
 
-  let results = {};
+  let results = { connection: 'OK', project: projectRef };
 
   try {
-    await client.connect();
-    results.connection = 'OK';
-    results.project = projectRef;
-
-    // ── 创建 questions 表 ──
+    // -- Create questions table --
     await client.query(`
       CREATE TABLE IF NOT EXISTS questions (
         id         SERIAL PRIMARY KEY,
@@ -107,7 +102,7 @@ module.exports = async (req, res) => {
     `);
     results.questions_table = 'created';
 
-    // ── 创建 admin_users 表 ──
+    // -- Create admin_users table --
     await client.query(`
       CREATE TABLE IF NOT EXISTS admin_users (
         id           SERIAL PRIMARY KEY,
@@ -121,7 +116,7 @@ module.exports = async (req, res) => {
     `);
     results.admin_users_table = 'created';
 
-    // ── 创建 app_settings 表 ──
+    // -- Create app_settings table --
     await client.query(`
       CREATE TABLE IF NOT EXISTS app_settings (
         key   TEXT PRIMARY KEY,
@@ -130,7 +125,7 @@ module.exports = async (req, res) => {
     `);
     results.app_settings_table = 'created';
 
-    // ── 创建 assessment_results 表 ──
+    // -- Create assessment_results table --
     await client.query(`
       CREATE TABLE IF NOT EXISTS assessment_results (
         id               TEXT PRIMARY KEY,
@@ -152,7 +147,7 @@ module.exports = async (req, res) => {
     `);
     results.assessment_results_table = 'created';
 
-    // ── 创建 exec_sql RPC 函数（供适配器使用）──
+    // -- Create exec_sql RPC function for adapter --
     await client.query(`
       CREATE OR REPLACE FUNCTION exec_sql(query_string TEXT)
       RETURNS SETOF JSONB AS $$
@@ -163,7 +158,7 @@ module.exports = async (req, res) => {
     `);
     results.exec_sql_function = 'created';
 
-    // ── 默认设置 ──
+    // -- Default settings --
     await client.query(`
       INSERT INTO app_settings (key, value) VALUES ('shuffle_questions', 'true')
       ON CONFLICT (key) DO NOTHING
@@ -173,7 +168,7 @@ module.exports = async (req, res) => {
       ON CONFLICT (key) DO NOTHING
     `);
 
-    // ── 管理员账号 ──
+    // -- Admin accounts --
     const userCount = await client.query('SELECT COUNT(*) FROM admin_users');
     if (parseInt(userCount.rows[0].count) === 0) {
       const adminHash = bcrypt.hashSync('admin123', 10);
@@ -182,22 +177,22 @@ module.exports = async (req, res) => {
 
       await client.query(
         `INSERT INTO admin_users (username, password_hash, role, display_name) VALUES ($1,$2,$3,$4)`,
-        ['admin', adminHash, 'super', '超级管理员']
+        ['admin', adminHash, 'super', 'Super Admin']
       );
       await client.query(
         `INSERT INTO admin_users (username, password_hash, role, display_name) VALUES ($1,$2,$3,$4)`,
-        ['examadmin', examHash, 'exam_admin', '考务管理员']
+        ['examadmin', examHash, 'exam_admin', 'Exam Admin']
       );
       await client.query(
         `INSERT INTO admin_users (username, password_hash, role, display_name) VALUES ($1,$2,$3,$4)`,
-        ['viewer', readHash, 'readonly', '只读用户']
+        ['viewer', readHash, 'readonly', 'Viewer']
       );
-      results.admin_users = '3 accounts created';
+      results.admin_users = '3 accounts created (admin/examadmin/viewer)';
     } else {
       results.admin_users = `already ${userCount.rows[0].count} accounts`;
     }
 
-    // ── 题库 ──
+    // -- Question bank --
     const qCount = await client.query('SELECT COUNT(*) FROM questions');
     if (parseInt(qCount.rows[0].count) === 0) {
       const QUESTIONS = getQuestions();
@@ -212,9 +207,6 @@ module.exports = async (req, res) => {
     } else {
       results.questions = `already ${qCount.rows[0].count} questions`;
     }
-
-    // ── 启用 RLS（可选，先禁用以简化开发）──
-    // await client.query('ALTER TABLE questions ENABLE ROW LEVEL SECURITY');
 
     results.success = true;
 
