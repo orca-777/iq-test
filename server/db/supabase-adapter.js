@@ -1,121 +1,151 @@
 /**
- * Supabase (PostgreSQL) 适配器
- * 通过 exec_sql RPC 函数操作 PostgreSQL
- *
- * 前提: 需要先调用 /api/init-supabase 创建表和 RPC 函数
- *
- * 环境变量:
- *   SUPABASE_URL  - Supabase 项目 URL (https://xxx.supabase.co)
- *   SUPABASE_KEY  - Supabase service_role secret key
+ * Supabase REST API Adapter
+ * Uses @supabase/supabase-js for all database operations
+ * Works entirely through REST API - no PostgreSQL direct connection needed
  */
-
 const { createClient } = require('@supabase/supabase-js');
 
 class SupabaseAdapter {
   constructor(url, key) {
     this.client = createClient(url, key, {
-      auth: { persistSession: false }
+      auth: { persistSession: false },
     });
+    this.url = url;
   }
 
   /**
-   * 执行查询（SELECT），返回 [{col: val, ...}, ...]
-   * 通过 exec_sql RPC 函数执行原生 SQL
+   * Execute a SQL query via exec_sql RPC function
+   * Returns array of rows
    */
   async query(sql, params = []) {
-    const { sql: pgSql, values } = this._toPg(sql, params);
+    // Parameterize the query
+    let finalSql = sql;
+    for (let i = 0; i < params.length; i++) {
+      const val = params[i];
+      if (typeof val === 'number') {
+        finalSql = finalSql.replace('?', String(val));
+      } else if (typeof val === 'string') {
+        finalSql = finalSql.replace('?', `'${val.replace(/'/g, "''")}'`);
+      } else if (val === null || val === undefined) {
+        finalSql = finalSql.replace('?', 'NULL');
+      } else {
+        finalSql = finalSql.replace('?', String(val));
+      }
+    }
+
     const { data, error } = await this.client.rpc('exec_sql', {
-      query_string: pgSql,
-      query_params: values
+      query_string: finalSql
     });
-    if (error) throw new Error(`Supabase query error: ${error.message}`);
-    if (!data) return [];
-    return data.map(row => this._toObject(row));
+
+    if (error) {
+      // Try direct REST API as fallback for simple queries
+      if (sql.trim().toUpperCase().startsWith('SELECT') && sql.toUpperCase().includes('FROM')) {
+        return await this._selectViaRest(sql);
+      }
+      throw new Error(`Supabase query failed: ${error.message}`);
+    }
+
+    return data || [];
   }
 
   /**
-   * 执行写操作（INSERT/UPDATE/DELETE）
+   * Execute a write SQL query
    */
   async run(sql, params = []) {
-    const { sql: pgSql, values } = this._toPg(sql, params);
-    const { error } = await this.client.rpc('exec_sql', {
-      query_string: pgSql,
-      query_params: values
-    });
-    if (error) throw new Error(`Supabase run error: ${error.message}`);
+    return await this.query(sql, params);
   }
 
   /**
-   * Supabase 自动持久化
-   */
-  async flush() {}
-
-  /**
-   * 执行多条 SQL
+   * Execute multiple SQL statements
    */
   async execScript(sql) {
     const statements = sql
       .split(';')
       .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--') && !s.startsWith('/*'));
+      .filter(s => s.length > 0 && !s.match(/^(--|\/\*)/));
+
+    const results = [];
     for (const stmt of statements) {
-      const { sql: pgSql } = this._toPg(stmt, []);
-      const { error } = await this.client.rpc('exec_sql', {
-        query_string: pgSql,
-        query_params: []
-      });
-      if (error) console.warn('execScript warning:', error.message);
+      try {
+        const result = await this.client.rpc('exec_sql', {
+          query_string: stmt
+        });
+        results.push(result.data);
+      } catch (e) {
+        results.push({ error: e.message });
+      }
     }
+    return results;
   }
 
-  close() {}
-
-  // ── 内部方法 ──
-
-  /**
-   * 将 SQLite SQL 转为 PostgreSQL 语法
-   */
-  _toPg(sql, params) {
-    let converted = sql;
-
-    // ? 占位符 → $1, $2, ...
-    let idx = 0;
-    const values = [];
-    converted = converted.replace(/\?/g, () => {
-      idx++;
-      values.push(params[idx - 1]);
-      return `$${idx}`;
-    });
-
-    // datetime('now','localtime') → NOW()
-    converted = converted.replace(/datetime\('now'\s*,\s*'localtime'\)/g, 'NOW()');
-
-    // INTEGER PRIMARY KEY AUTOINCREMENT → SERIAL PRIMARY KEY
-    converted = converted.replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, 'SERIAL PRIMARY KEY');
-
-    // INSERT OR IGNORE → INSERT ... ON CONFLICT DO NOTHING
-    converted = converted.replace(/INSERT OR IGNORE\s+INTO\s+(\w+)\s+\(([^)]+)\)\s+VALUES/g,
-      'INSERT INTO $1 ($2) VALUES');
-
-    // INSERT OR REPLACE → INSERT ... ON CONFLICT DO UPDATE
-    converted = converted.replace(/INSERT OR REPLACE\s+INTO\s+(\w+)\s+\(([^)]+)\)\s+VALUES/g,
-      'INSERT INTO $1 ($2) VALUES');
-
-    return { sql: converted, values };
+  flush() {
+    // No-op for REST API (stateless)
   }
 
   /**
-   * 将 Supabase 返回的 JSONB 行转为普通对象
+   * Fallback SELECT via REST API
    */
-  _toObject(row) {
-    if (typeof row === 'string') {
-      try { return JSON.parse(row); } catch { return {}; }
+  async _selectViaRest(sql) {
+    // Extract table name and conditions from simple SELECT queries
+    const match = sql.match(/FROM\s+(\w+)/i);
+    if (!match) return [];
+
+    const table = match[1];
+    const whereMatch = sql.match(/WHERE\s+(.+?)(?:\s+ORDER\s+|\s+LIMIT\s+|\s+GROUP\s+|$)/is);
+    
+    let query = this.client.from(table).select('*');
+    
+    if (whereMatch) {
+      const conditions = whereMatch[1].trim();
+      // Parse simple equality conditions
+      const eqMatches = conditions.match(/(\w+)\s*=\s*'?([^']*)'?/g);
+      if (eqMatches) {
+        for (const cond of eqMatches) {
+          const parts = cond.match(/(\w+)\s*=\s*'?([^']*)'?/);
+          if (parts) {
+            query = query.eq(parts[1], parts[2]);
+          }
+        }
+      }
     }
-    if (row && typeof row === 'object') {
-      return { ...row };
+
+    // Handle ORDER BY
+    const orderMatch = sql.match(/ORDER\s+BY\s+(\w+)(\s+(ASC|DESC))?/i);
+    if (orderMatch) {
+      query = query.order(orderMatch[1], { ascending: (orderMatch[3] || 'ASC').toUpperCase() === 'ASC' });
     }
-    return {};
+
+    // Handle LIMIT
+    const limitMatch = sql.match(/LIMIT\s+(\d+)/i);
+    if (limitMatch) {
+      query = query.limit(parseInt(limitMatch[1]));
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+
+  /**
+   * Direct REST API helpers for common operations
+   */
+  async selectAll(table) {
+    const { data, error } = await this.client.from(table).select('*');
+    if (error) throw error;
+    return data;
+  }
+
+  async insertRow(table, row) {
+    const { data, error } = await this.client.from(table).insert(row).select();
+    if (error) throw error;
+    return data;
+  }
+
+  async updateRow(table, idCol, id, updates) {
+    const { data, error } = await this.client.from(table).update(updates).eq(idCol, id).select();
+    if (error) throw error;
+    return data;
   }
 }
 
-module.exports = SupabaseAdapter;
+module.exports = { SupabaseAdapter };
