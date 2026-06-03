@@ -25,22 +25,69 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'SUPABASE_URL or SUPABASE_KEY not set' });
   }
 
+  const projectRef = supabaseUrl.replace('https://', '').split('.')[0];
+
   const { Client } = require('pg');
-  const client = new Client({
-    host: `db.${supabaseUrl.replace('https://', '').split('.')[0]}.supabase.co`,
-    port: 5432,
-    database: 'postgres',
-    user: `postgres.${supabaseUrl.replace('https://', '').split('.')[0]}`,
-    password: supabaseKey,
-    ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 10000,
-  });
+
+  // 尝试多个连接方式: Supavisor pooler (6543) -> 直连 (5432)
+  let client = null;
+  const connConfigs = [
+    // Supavisor transaction-mode pooler (port 6543)
+    {
+      host: `aws-0-${projectRef}.pooler.supabase.com`,
+      port: 6543,
+      database: 'postgres',
+      user: `postgres.${projectRef}`,
+      password: supabaseKey,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 10000,
+    },
+    // Direct connection (port 5432)
+    {
+      host: `db.${projectRef}.supabase.co`,
+      port: 5432,
+      database: 'postgres',
+      user: `postgres.${projectRef}`,
+      password: supabaseKey,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 10000,
+    },
+    // Session-mode pooler (port 6543) with different host format
+    {
+      host: `${projectRef}.pooler.supabase.com`,
+      port: 6543,
+      database: 'postgres',
+      user: `postgres.${projectRef}`,
+      password: supabaseKey,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 10000,
+    },
+  ];
+
+  for (const config of connConfigs) {
+    try {
+      client = new Client(config);
+      await client.connect();
+      break;
+    } catch (e) {
+      if (client) { try { await client.end(); } catch {} }
+      client = null;
+    }
+  }
+
+  if (!client) {
+    return res.status(500).json({
+      error: 'Cannot connect to Supabase PostgreSQL - all connection methods failed',
+      success: false
+    });
+  }
 
   let results = {};
 
   try {
     await client.connect();
-    results.connected = true;
+    results.connection = 'OK';
+    results.project = projectRef;
 
     // ── 创建 questions 表 ──
     await client.query(`
